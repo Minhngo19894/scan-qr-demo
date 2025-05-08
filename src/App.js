@@ -1,186 +1,115 @@
-import React, { useRef, useState } from "react";
-import Webcam from "react-webcam";
-import { BrowserMultiFormatReader } from "@zxing/browser";
-import Quagga from "quagga";
+import React, { useState } from 'react';
+import Webcam from 'react-webcam';
+import jsQR from 'jsqr';
+import Quagga from 'quagga';
 
 const App = () => {
-  const webcamRef = useRef(null);
-  const [qrData, setQrData] = useState("");
-  const [barcodeData, setBarcodeData] = useState("");
-  const [qrImage, setQrImage] = useState(null);
-  const [barcodeImage, setBarcodeImage] = useState(null);
-  const [screenshot, setScreenshot] = useState(null);
+  const [qrData, setQrData] = useState(null);
+  const [barcodeData, setBarcodeData] = useState(null);
+  const [imageSrc, setImageSrc] = useState(null);
 
-  const capture = async () => {
-    const screenshot = webcamRef.current.getScreenshot();
-    if (!screenshot) return;
+  const webcamRef = React.useRef(null);
 
-    // Cập nhật ảnh gốc để kiểm tra
-    setScreenshot(screenshot);
-
-    // Reset kết quả
-    setQrData("Đang quét...");
-    setBarcodeData("Đang quét...");
-    setQrImage(null);
-    setBarcodeImage(null);
-
-    const { qrImage, barcodeImage } = await detectAndCropCodes(screenshot);
-
-    // Hiển thị ảnh crop
-    setQrImage(qrImage);
-    setBarcodeImage(barcodeImage);
-
-    // Quét QR
-    if (qrImage) {
-      try {
-        const qrReader = new BrowserMultiFormatReader();
-        const result = await qrReader.decodeFromImageUrl(qrImage);
-        setQrData(result.text);
-      } catch {
-        setQrData("Không phát hiện QR");
-      }
-    } else {
-      setQrData("Không tìm thấy vùng QR");
-    }
-
-    // Quét barcode
-    if (barcodeImage) {
-      Quagga.decodeSingle({
-        src: barcodeImage,
-        inputStream: { size: 1600 }, // Tăng kích thước xử lý ảnh
-        decoder: {
-          readers: [
-            "code_128_reader", 
-            "ean_reader", 
-            "ean_8_reader", 
-            "code_39_reader", 
-            "upc_reader", 
-            "upc_e_reader"
-          ] // Hỗ trợ thêm nhiều loại barcode
-        },
-        locate: true
-      }, (data) => {
-        if (data?.codeResult?.code) {
-          setBarcodeData(data.codeResult.code);
-        } else {
-          setBarcodeData("Không phát hiện barcode");
-        }
-      });
-    } else {
-      setBarcodeData("Không tìm thấy vùng barcode");
-    }
+  // Chụp ảnh từ webcam
+  const capture = () => {
+    const imageSrc = webcamRef.current.getScreenshot();
+    setImageSrc(imageSrc); // Cập nhật ảnh chụp
+    processImage(imageSrc); // Xử lý ảnh nhận diện mã
   };
 
-  const detectAndCropCodes = async (imageUrl) => {
-    const img = new Image();
-    img.src = imageUrl;
-    await new Promise((res) => (img.onload = res));
+  // Nhận diện QR Code từ ảnh
+  const detectQRCode = (image) => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = image.width;
+    canvas.height = image.height;
+    ctx.drawImage(image, 0, 0, image.width, image.height);
 
-    const canvas = document.createElement("canvas");
-    canvas.width = img.naturalWidth;
-    canvas.height = img.naturalHeight;
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, image.width, image.height);
+    const code = jsQR(imageData.data, image.width, image.height);
+    return code ? code.data : null;
+  };
 
-    let qrImage = null;
-    let barcodeImage = null;
-
-    // --- QR Code chính xác hơn ---
-    try {
-      const qrReader = new BrowserMultiFormatReader();
-      const result = await qrReader.decodeFromImageElement(img);
-      const points = result.resultPoints;
-      const xs = points.map(p => p.x);
-      const ys = points.map(p => p.y);
-      const x = Math.max(Math.min(...xs) - 20, 0);
-      const y = Math.max(Math.min(...ys) - 20, 0);
-      const w = Math.min(Math.max(...xs) - x + 40, canvas.width - x);
-      const h = Math.min(Math.max(...ys) - y + 40, canvas.height - y);
-
-      const qrCanvas = document.createElement("canvas");
-      qrCanvas.width = w;
-      qrCanvas.height = h;
-      qrCanvas.getContext("2d").drawImage(canvas, x, y, w, h, 0, 0, w, h);
-      qrImage = qrCanvas.toDataURL("image/jpeg");
-    } catch (err) {
-      console.log("Không phát hiện QR:", err);
-    }
-
-    // --- Barcode chính xác hơn ---
-    await new Promise((resolve) => {
-      Quagga.decodeSingle({
-        src: imageUrl,
-        inputStream: { size: 1600 },
-        decoder: {
-          readers: [
-            "code_128_reader",
-            "ean_reader",
-            "ean_8_reader",
-            "code_39_reader",
-            "upc_reader",
-            "upc_e_reader"
-          ],
+  // Nhận diện Barcode từ ảnh
+  const detectBarcode = (image) => {
+    return new Promise((resolve, reject) => {
+      Quagga.decodeSingle(
+        {
+          src: image,
+          numOfWorkers: 0, // Sử dụng 0 worker cho client-side
+          inputStream: {
+            size: 800, // Kích thước ảnh đầu vào
+          },
+          decoder: {
+            readers: ['ean_reader', 'upc_reader'], // Các loại mã vạch
+          },
         },
-        locate: true
-      }, (data) => {
-        if (data?.box) {
-          const xs = data.box.map(p => p[0]);
-          const ys = data.box.map(p => p[1]);
-          const x = Math.max(Math.min(...xs) - 10, 0);
-          const y = Math.max(Math.min(...ys) - 10, 0);
-          const w = Math.min(Math.max(...xs) - x + 20, canvas.width - x);
-          const h = Math.min(Math.max(...ys) - y + 20, canvas.height - y);
-
-          const barCanvas = document.createElement("canvas");
-          barCanvas.width = w;
-          barCanvas.height = h;
-          barCanvas.getContext("2d").drawImage(canvas, x, y, w, h, 0, 0, w, h);
-          barcodeImage = barCanvas.toDataURL("image/jpeg");
+        (result) => {
+          if (result && result.codeResult) {
+            resolve(result.codeResult.code);
+          } else {
+            reject('Không tìm thấy mã vạch');
+          }
         }
-        resolve();
-      });
+      );
     });
+  };
 
-    return { qrImage, barcodeImage };
+  // Xử lý ảnh sau khi chụp
+  const processImage = async (imageSrc) => {
+    const image = new Image();
+    image.src = imageSrc;
+
+    // Đợi ảnh tải xong
+    image.onload = async () => {
+      // Nhận diện QR Code
+      const qrCode = detectQRCode(image);
+      if (qrCode) {
+        setQrData(qrCode);
+      } else {
+        setQrData('Không tìm thấy QR Code');
+      }
+
+      // Nhận diện Barcode
+      try {
+        const barcode = await detectBarcode(imageSrc);
+        setBarcodeData(barcode);
+      } catch (error) {
+        setBarcodeData('Không tìm thấy Barcode');
+      }
+    };
   };
 
   return (
-    <div style={{ padding: 16, textAlign: "center", fontFamily: "Arial" }}>
-      <h2>📷 Quét QR & Barcode</h2>
+    <div style={{ textAlign: 'center', padding: '20px' }}>
+      <h1>Ứng Dụng Chụp Ảnh QR Code và Barcode</h1>
       <Webcam
+        audio={false}
         ref={webcamRef}
         screenshotFormat="image/jpeg"
-        videoConstraints={{ facingMode: "environment" }}
-        style={{ width: "100%", maxWidth: 400 }}
+        width="100%"
       />
-      <button
-        onClick={capture}
-        style={{
-          marginTop: 12,
-          padding: "8px 16px",
-          backgroundColor: "#007bff",
-          color: "#fff",
-          border: "none",
-          borderRadius: 6,
-          fontSize: 16
-        }}
-      >
-        Chụp & Quét
-      </button>
-
-      <div style={{ marginTop: 24 }}>
-        <h4>🔍 QR Code</h4>
-        {qrImage && <img src={qrImage} alt="QR" style={{ maxWidth: 200 }} />}
-        <p>{qrData}</p>
-
-        <h4>📦 Barcode</h4>
-        {barcodeImage && (
-          <img src={barcodeImage} alt="Barcode" style={{ maxWidth: 200 }} />
+      <br />
+      <button onClick={capture}>Chụp Ảnh</button>
+      <div style={{ marginTop: '20px' }}>
+        {imageSrc && (
+          <div>
+            <h2>Ảnh Chụp</h2>
+            <img src={imageSrc} alt="Captured" width="300" />
+          </div>
         )}
-        <p>{barcodeData}</p>
-
-        <h4>🔳 Ảnh Gốc (Kiểm tra vị trí mã vạch)</h4>
-        <img src={screenshot} alt="Original" style={{ maxWidth: 300 }} />
+        {qrData && (
+          <div>
+            <h3>Thông tin QR Code:</h3>
+            <p>{qrData}</p>
+          </div>
+        )}
+        {barcodeData && (
+          <div>
+            <h3>Thông tin Barcode:</h3>
+            <p>{barcodeData}</p>
+          </div>
+        )}
       </div>
     </div>
   );
