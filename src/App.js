@@ -73,11 +73,11 @@ const App = () => {
       barCtx.drawImage(canvas, barX, barY, barW, barH, 0, 0, barW, barH);
       const barDataURL = barCanvas.toDataURL("image/png");
       setBarcodeImage(barDataURL);
-      
+
       // Tạo thẻ ảnh mới từ vùng crop
       const croppedImg = new Image();
       croppedImg.src = barDataURL;
-      
+
       croppedImg.onload = () => {
         reader
           .decodeFromImage(croppedImg)
@@ -128,7 +128,7 @@ const App = () => {
 const styles = {
   container: {
     padding: 16,
-    maxWidth: 480,
+    with: '100%',
     margin: "auto",
     fontFamily: "Arial, sans-serif",
   },
