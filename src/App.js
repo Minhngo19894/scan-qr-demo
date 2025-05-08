@@ -37,6 +37,35 @@ const App = () => {
     tempCtx.drawImage(ctx.canvas, x, y, w, h, 0, 0, w, h);
     return tempCanvas.toDataURL("image/png");
   };
+  const detectWithQuagga = (base64Image) => {
+    loadImage(base64Image).then((img) => {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0, img.width, img.height);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+      Quagga.decodeSingle({
+        src: base64Image,
+        numOfWorkers: 0,
+        inputStream: {
+          size: 800,
+        },
+        decoder: {
+          readers: ["code_128_reader", "ean_reader", "ean_8_reader", "code_39_reader"],
+        },
+        locate: true,
+      }, (result) => {
+        if (result && result.codeResult) {
+          setQuaggaResult(result.codeResult.code);
+        } else {
+          setQuaggaResult("Không phát hiện");
+        }
+      });
+    });
+  };
+
 
   const captureAndProcess = () => {
     const imageSrc = webcamRef.current.getScreenshot();
@@ -67,26 +96,7 @@ const App = () => {
         setQRImage(null);
       }
 
-      // === Barcode Detection ===
-      Quagga.decodeSingle({
-        src: imageSrc, // vẫn cần truyền src nếu không dùng trực tiếp imageData
-        numOfWorkers: 0,
-        inputStream: {
-          size: 800,
-          singleChannel: false
-        },
-        decoder: {
-          readers: ["code_128_reader", "ean_reader", "ean_8_reader", "code_39_reader"],
-        },
-        locate: true,
-      }, (result) => {
-        if (result && result.codeResult) {
-          setBarcodeResultI(result.codeResult.code)
-          console.log("Barcode detected by Quagga:", result.codeResult.code);
-        } else {
-          console.log("No barcode detected by Quagga.");
-        }
-      });
+    detectWithQuagga(imageSrc)
 
     };
   };
