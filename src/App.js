@@ -63,9 +63,7 @@ const App = () => {
     };
   };
 
-  if (!opencvReady) {
-    return <div>Đang tải OpenCV...</div>;
-  }
+
 
   return (
     <div style={{ textAlign: "center" }}>
