@@ -51,7 +51,7 @@ const App = () => {
 
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-      // QR code detection
+      // === QR Code Detection ===
       const codeQR = jsQR(imageData.data, canvas.width, canvas.height);
       if (codeQR) {
         setQRResult(codeQR.data);
@@ -66,10 +66,10 @@ const App = () => {
         setQRImage(null);
       }
 
-      // Barcode detection (center crop)
+      // === Barcode Detection ===
       const reader = new BrowserMultiFormatReader();
       reader
-        .decodeFromImageElement(img)
+        .decodeFromImage(img.src) // 👈 dùng ảnh gốc, không dùng canvas
         .then((result) => {
           setBarcodeResult(result.getText());
           // Giả định barcode ở phần dưới ảnh
@@ -96,8 +96,11 @@ const App = () => {
       <Webcam
         ref={webcamRef}
         screenshotFormat="image/png"
-        videoConstraints={{ facingMode: "environment" }}
-        width="100%"
+        videoConstraints={{
+          facingMode: "environment",
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        }}
         style={styles.webcam}
       />
       <button onClick={captureAndProcess} style={styles.button}>
