@@ -1,216 +1,189 @@
 import React, { useRef, useState } from 'react';
 import Webcam from 'react-webcam';
 import { BrowserMultiFormatReader, BarcodeFormat, DecodeHintType } from '@zxing/library';
-import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
 
-const App = () => {
+const MultiCodeScanner = () => {
   const webcamRef = useRef(null);
   const [capturedImage, setCapturedImage] = useState(null);
   const [scanResults, setScanResults] = useState([]);
-  const [isScanning, setIsScanning] = useState(false);
-  const [cameraReady, setCameraReady] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  // Cấu hình các loại mã cần quét
+  // Cấu hình ZXing để quét nhiều loại mã
   const hints = new Map();
   hints.set(DecodeHintType.POSSIBLE_FORMATS, [
     BarcodeFormat.QR_CODE,
     BarcodeFormat.EAN_13,
-    BarcodeFormat.CODE_128,
-    BarcodeFormat.UPC_A
+    BarcodeFormat.CODE_128
   ]);
+  hints.set(DecodeHintType.TRY_HARDER, true);
 
-  // Chụp ảnh từ camera
+  // Chụp ảnh
   const capturePhoto = () => {
     const imageSrc = webcamRef.current.getScreenshot();
     setCapturedImage(imageSrc);
-    setScanResults([]); // Reset kết quả cũ
   };
 
-  // Quét mã từ ảnh đã chụp
-  const scanImage = async () => {
+  // Quét nhiều mã từ ảnh
+  const scanMultipleCodes = async () => {
     if (!capturedImage) return;
     
-    setIsScanning(true);
+    setIsProcessing(true);
+    setScanResults([]);
     const codeReader = new BrowserMultiFormatReader(hints);
     
     try {
-      // Thử quét nhiều lần để bắt được cả QR và barcode
-      const results = [];
+      // Tạo ảnh từ URL
+      const img = new Image();
+      img.src = capturedImage;
+      await img.decode();
       
-      // Lần quét 1
-      try {
-        const result = await codeReader.decodeFromImageUrl(capturedImage);
-        if (result) results.push(result);
-      } catch (e) {}
+      // Tạo canvas để xử lý ảnh
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
       
-      // Lần quét 2
+      // Chiến lược 1: Quét toàn bộ ảnh nhiều lần
+      const results = await tryMultipleScans(codeReader, canvas);
+      
+      // Chiến lược 2: Nếu không đủ mã, thử cắt ảnh
+      if (results.length < 2) {
+        const croppedResults = await tryCroppedScans(codeReader, canvas);
+        croppedResults.forEach(result => {
+          if (!results.some(r => r.text === result.text)) {
+            results.push(result);
+          }
+        });
+      }
+      
+      setScanResults(results);
+    } catch (error) {
+      console.error('Lỗi quét mã:', error);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Quét nhiều lần trên cùng ảnh
+  const tryMultipleScans = async (codeReader, canvas) => {
+    const results = [];
+    for (let i = 0; i < 3; i++) { // Thử 3 lần
       try {
-        const result = await codeReader.decodeFromImageUrl(capturedImage);
+        const result = await codeReader.decodeFromCanvas(canvas);
         if (result && !results.some(r => r.text === result.text)) {
           results.push(result);
         }
-      } catch (e) {}
-      
-      if (results.length > 0) {
-        setScanResults(results);
-        toast.success(`Đã tìm thấy ${results.length} mã`);
-      } else {
-        toast.warning('Không tìm thấy mã nào');
+      } catch (e) {
+        // Bỏ qua lỗi nếu không tìm thấy mã
       }
-    } catch (error) {
-      toast.error('Lỗi khi quét mã: ' + error.message);
-    } finally {
-      setIsScanning(false);
     }
+    return results;
   };
 
-  // Xác định loại mã
-  const getFormatName = (format) => {
-    switch (format) {
-      case BarcodeFormat.QR_CODE: return 'QR Code';
-      case BarcodeFormat.EAN_13: return 'Barcode (EAN-13)';
-      case BarcodeFormat.CODE_128: return 'Barcode (Code 128)';
-      case BarcodeFormat.UPC_A: return 'Barcode (UPC-A)';
-      default: return 'Không xác định';
+  // Cắt ảnh và quét từng phần
+  const tryCroppedScans = async (codeReader, canvas) => {
+    const results = [];
+    const { width, height } = canvas;
+    
+    // Chia ảnh thành 4 phần và quét từng phần
+    const regions = [
+      { x: 0, y: 0, w: width/2, h: height/2 }, // Top-left
+      { x: width/2, y: 0, w: width/2, h: height/2 }, // Top-right
+      { x: 0, y: height/2, w: width/2, h: height/2 }, // Bottom-left
+      { x: width/2, y: height/2, w: width/2, h: height/2 } // Bottom-right
+    ];
+    
+    for (const region of regions) {
+      const croppedCanvas = cropCanvas(canvas, region);
+      try {
+        const result = await codeReader.decodeFromCanvas(croppedCanvas);
+        if (result && !results.some(r => r.text === result.text)) {
+          results.push(result);
+        }
+      } catch (e) {
+        // Bỏ qua nếu không tìm thấy
+      }
     }
+    
+    return results;
+  };
+
+  // Hàm cắt ảnh từ canvas
+  const cropCanvas = (sourceCanvas, { x, y, w, h }) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(
+      sourceCanvas,
+      x, y, w, h, // Source region
+      0, 0, w, h  // Destination region
+    );
+    return canvas;
   };
 
   return (
-    <div style={styles.container}>
-      <h1 style={styles.header}>Quét QR/Barcode</h1>
+    <div style={{ padding: '20px' }}>
+      <h1>Quét Nhiều Mã</h1>
       
-      {/* Camera */}
-      <div style={styles.cameraContainer}>
-        {!capturedImage ? (
-          <Webcam
-            audio={false}
-            ref={webcamRef}
-            screenshotFormat="image/jpeg"
-            videoConstraints={{
-              facingMode: 'environment',
-              width: { ideal: 1280 },
-              height: { ideal: 720 }
-            }}
-            style={styles.camera}
-            onUserMedia={() => setCameraReady(true)}
-            onUserMediaError={(e) => toast.error('Lỗi camera: ' + e.message)}
-          />
-        ) : (
-          <img src={capturedImage} alt="Captured" style={styles.camera} />
-        )}
-      </div>
+      {!capturedImage ? (
+        <Webcam
+          audio={false}
+          ref={webcamRef}
+          screenshotFormat="image/jpeg"
+          videoConstraints={{ facingMode: 'environment' }}
+          style={{ width: '100%', borderRadius: '10px' }}
+        />
+      ) : (
+        <img 
+          src={capturedImage} 
+          alt="Captured" 
+          style={{ width: '100%', borderRadius: '10px' }} 
+        />
+      )}
 
-      {/* Nút điều khiển */}
-      <div style={styles.controls}>
+      <div style={{ margin: '20px 0' }}>
         {!capturedImage ? (
-          <button 
-            onClick={capturePhoto} 
-            style={styles.button}
-            disabled={!cameraReady}
-          >
-            Chụp Ảnh
-          </button>
+          <button onClick={capturePhoto}>Chụp Ảnh</button>
         ) : (
           <>
+            <button onClick={() => setCapturedImage(null)}>Chụp Lại</button>
             <button 
-              onClick={() => setCapturedImage(null)} 
-              style={{...styles.button, backgroundColor: '#f44336'}}
+              onClick={scanMultipleCodes} 
+              disabled={isProcessing}
             >
-              Chụp Lại
-            </button>
-            <button 
-              onClick={scanImage} 
-              style={styles.button}
-              disabled={isScanning}
-            >
-              {isScanning ? 'Đang quét...' : 'Quét Mã'}
+              {isProcessing ? 'Đang xử lý...' : 'Quét Nhiều Mã'}
             </button>
           </>
         )}
       </div>
 
-      {/* Kết quả quét */}
       {scanResults.length > 0 && (
-        <div style={styles.results}>
-          <h3>Kết quả quét:</h3>
-          <ul style={styles.resultList}>
-            {scanResults.map((result, index) => (
-              <li key={index} style={styles.resultItem}>
-                <strong>Mã {index + 1}:</strong> {result.text}<br />
-                <strong>Loại:</strong> {getFormatName(result.format)}
+        <div>
+          <h3>Kết quả ({scanResults.length} mã):</h3>
+          <ul style={{ textAlign: 'left' }}>
+            {scanResults.map((result, i) => (
+              <li key={i}>
+                <strong>Mã {i+1}:</strong> {result.text} 
+                <br /><small>({formatName(result.format)})</small>
               </li>
             ))}
           </ul>
         </div>
       )}
-
-      <ToastContainer position="bottom-center" />
     </div>
   );
 };
 
-// Styles
-const styles = {
-  container: {
-    maxWidth: '100%',
-    padding: '20px',
-    textAlign: 'center',
-    backgroundColor: '#f5f5f5',
-    minHeight: '100vh'
-  },
-  header: {
-    color: '#333',
-    marginBottom: '20px'
-  },
-  cameraContainer: {
-    width: '100%',
-    aspectRatio: '4/3',
-    backgroundColor: '#000',
-    margin: '0 auto 20px',
-    borderRadius: '10px',
-    overflow: 'hidden',
-    position: 'relative'
-  },
-  camera: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover'
-  },
-  controls: {
-    display: 'flex',
-    justifyContent: 'center',
-    gap: '10px',
-    marginBottom: '20px'
-  },
-  button: {
-    padding: '10px 20px',
-    backgroundColor: '#4CAF50',
-    color: 'white',
-    border: 'none',
-    borderRadius: '5px',
-    cursor: 'pointer',
-    fontSize: '16px'
-  },
-  results: {
-    backgroundColor: 'white',
-    padding: '15px',
-    borderRadius: '10px',
-    boxShadow: '0 2px 5px rgba(0,0,0,0.1)'
-  },
-  resultList: {
-    listStyle: 'none',
-    padding: 0,
-    textAlign: 'left'
-  },
-  resultItem: {
-    margin: '10px 0',
-    padding: '10px',
-    borderBottom: '1px solid #eee'
+// Helper: Định dạng tên mã
+const formatName = (format) => {
+  switch (format) {
+    case BarcodeFormat.QR_CODE: return 'QR Code';
+    case BarcodeFormat.EAN_13: return 'Barcode (EAN-13)';
+    case BarcodeFormat.CODE_128: return 'Barcode (Code 128)';
+    default: return format;
   }
 };
 
-export default App;
+export default MultiCodeScanner;
