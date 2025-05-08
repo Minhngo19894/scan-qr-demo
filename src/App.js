@@ -119,8 +119,8 @@ const App = () => {
   }
   const videoConstraints = {
     facingMode: "environment", // Đảm bảo camera sau được sử dụng
-    width: 640, // Giảm kích thước của camera để dễ dàng nhận diện
-    height: 480
+    width: 320, // Giảm kích thước của camera để dễ dàng nhận diện
+    height: 240
   };
 
 
