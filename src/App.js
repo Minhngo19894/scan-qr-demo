@@ -8,11 +8,11 @@ const App = () => {
   const [opencvReady, setOpenCVReady] = useState(false);
   const [barcodeResult, setBarcodeResult] = useState("");
   const [qrResult, setQRResult] = useState("");
+  const [qrImage, setQRImage] = useState(null);
+  const [barcodeImage, setBarcodeImage] = useState(null);
 
-  // Load OpenCV.js đúng cách chỉ 1 lần
   useEffect(() => {
     if (window.cv) {
-      console.log("OpenCV đã tồn tại");
       setOpenCVReady(true);
       return;
     }
@@ -20,21 +20,22 @@ const App = () => {
     const script = document.createElement("script");
     script.src = "https://docs.opencv.org/4.x/opencv.js";
     script.async = true;
-
     script.onload = () => {
-      console.log("Script opencv.js đã tải");
-      window.cv['onRuntimeInitialized'] = () => {
-        console.log("✅ OpenCV đã sẵn sàng");
+      window.cv.onRuntimeInitialized = () => {
         setOpenCVReady(true);
       };
     };
-
-    script.onerror = () => {
-      console.error("❌ Lỗi khi tải opencv.js");
-    };
-
     document.body.appendChild(script);
   }, []);
+
+  const cropRegion = (ctx, x, y, w, h) => {
+    const tempCanvas = document.createElement("canvas");
+    tempCanvas.width = w;
+    tempCanvas.height = h;
+    const tempCtx = tempCanvas.getContext("2d");
+    tempCtx.drawImage(ctx.canvas, x, y, w, h, 0, 0, w, h);
+    return tempCanvas.toDataURL("image/png");
+  };
 
   const captureAndProcess = () => {
     const imageSrc = webcamRef.current.getScreenshot();
@@ -50,41 +51,113 @@ const App = () => {
 
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-      // QR Code
+      // QR code detection
       const codeQR = jsQR(imageData.data, canvas.width, canvas.height);
-      setQRResult(codeQR ? codeQR.data : "QR không nhận diện được");
+      if (codeQR) {
+        setQRResult(codeQR.data);
+        const { topLeftCorner, bottomRightCorner } = codeQR.location;
+        const cropX = topLeftCorner.x;
+        const cropY = topLeftCorner.y;
+        const cropWidth = bottomRightCorner.x - cropX;
+        const cropHeight = bottomRightCorner.y - cropY;
+        setQRImage(cropRegion(ctx, cropX, cropY, cropWidth, cropHeight));
+      } else {
+        setQRResult("QR không nhận diện được");
+        setQRImage(null);
+      }
 
-      // Barcode
+      // Barcode detection (center crop)
       const reader = new BrowserMultiFormatReader();
       reader
         .decodeFromImageElement(img)
-        .then((result) => setBarcodeResult(result.getText()))
-        .catch(() => setBarcodeResult("Barcode không nhận diện được"));
+        .then((result) => {
+          setBarcodeResult(result.getText());
+          // Giả định barcode ở phần dưới ảnh
+          const barX = canvas.width * 0.1;
+          const barY = canvas.height * 0.7;
+          const barW = canvas.width * 0.8;
+          const barH = canvas.height * 0.2;
+          setBarcodeImage(cropRegion(ctx, barX, barY, barW, barH));
+        })
+        .catch(() => {
+          setBarcodeResult("Barcode không nhận diện được");
+          setBarcodeImage(null);
+        });
     };
   };
 
-
+  if (!opencvReady) {
+    return <div style={styles.loading}>Đang tải OpenCV...</div>;
+  }
 
   return (
-    <div style={{ textAlign: "center" }}>
-      <h1>Scanner QR + Barcode</h1>
+    <div style={styles.container}>
+      <h1 style={styles.title}>📷 QR & Barcode Scanner</h1>
       <Webcam
         ref={webcamRef}
         screenshotFormat="image/png"
         videoConstraints={{ facingMode: "environment" }}
-        width={320}
-        height={240}
+        width="100%"
+        style={styles.webcam}
       />
-      <br />
-      <button onClick={captureAndProcess}>Chụp và quét mã</button>
-      <div style={{ marginTop: "20px" }}>
-        <h3>QR Code:</h3>
+      <button onClick={captureAndProcess} style={styles.button}>
+        Chụp & Quét mã
+      </button>
+
+      <div style={styles.resultSection}>
+        <h2>QR Code:</h2>
         <p>{qrResult}</p>
-        <h3>Barcode:</h3>
+        {qrImage && <img src={qrImage} alt="QR Crop" style={styles.croppedImage} />}
+
+        <h2>Barcode:</h2>
         <p>{barcodeResult}</p>
+        {barcodeImage && <img src={barcodeImage} alt="Barcode Crop" style={styles.croppedImage} />}
       </div>
     </div>
   );
+};
+
+const styles = {
+  container: {
+    padding: 16,
+    maxWidth: 480,
+    margin: "auto",
+    fontFamily: "Arial, sans-serif",
+  },
+  title: {
+    textAlign: "center",
+  },
+  webcam: {
+    borderRadius: 8,
+    width: "100%",
+    maxWidth: "100%",
+  },
+  button: {
+    marginTop: 12,
+    padding: 10,
+    fontSize: 16,
+    backgroundColor: "#007bff",
+    color: "white",
+    border: "none",
+    borderRadius: 6,
+    width: "100%",
+    cursor: "pointer",
+  },
+  resultSection: {
+    marginTop: 24,
+    textAlign: "center",
+  },
+  croppedImage: {
+    marginTop: 8,
+    maxWidth: "90%",
+    borderRadius: 6,
+    border: "1px solid #ccc",
+  },
+  loading: {
+    textAlign: "center",
+    marginTop: 40,
+    fontSize: 20,
+  },
 };
 
 export default App;
