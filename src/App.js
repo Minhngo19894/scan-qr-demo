@@ -15,8 +15,8 @@ const App = () => {
   // Video Constraints để sử dụng camera sau trên điện thoại
   const videoConstraints = {
     facingMode: "environment", // Đảm bảo camera sau được sử dụng
-    width: 1280,
-    height: 720
+    width: 640, // Giảm kích thước của camera để dễ dàng nhận diện
+    height: 480
   };
 
   // Chụp ảnh từ webcam
@@ -126,7 +126,7 @@ const App = () => {
         audio={false}
         ref={webcamRef}
         screenshotFormat="image/jpeg"
-        width="100%"
+        width="80%" // Điều chỉnh kích thước camera nhỏ hơn
         videoConstraints={videoConstraints} // Sử dụng camera sau
       />
       <br />
