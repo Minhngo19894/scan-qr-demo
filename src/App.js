@@ -1,79 +1,76 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import Webcam from "react-webcam";
 import jsQR from "jsqr";
 import { BrowserMultiFormatReader } from "@zxing/library";
 
-function QRBarcodeScanner() {
+const App = () => {
   const webcamRef = useRef(null);
-  const [qrText, setQrText] = useState("");
-  const [barText, setBarText] = useState("");
+  const [opencvReady, setOpenCVReady] = useState(false);
+  const [barcodeResult, setBarcodeResult] = useState("");
+  const [qrResult, setQRResult] = useState("");
 
-  const captureAndScan = async () => {
-    const screenshot = webcamRef.current.getScreenshot();
-    if (!screenshot) return;
+  // Load OpenCV.js
+  useEffect(() => {
+    const checkReady = setInterval(() => {
+      if (window.cv && window.cv.ready) {
+        setOpenCVReady(true);
+        clearInterval(checkReady);
+      }
+    }, 100);
+  }, []);
+
+  const captureAndProcess = () => {
+    const imageSrc = webcamRef.current.getScreenshot();
     const img = new Image();
-    img.src = screenshot;
-    img.onload = async () => {
-      // 1. Dùng OpenCV.js để phát hiện mã
-      const mat = cv.imread(img);
-      // Phát hiện QR code
-      const qrDetector = new cv.QRCodeDetector();
-      const qrPoints = new cv.Mat();
-      if (qrDetector.detect(mat, qrPoints)) {
-        const data = qrDetector.decode(mat, qrPoints);
-        setQrText(data || "");
-      }
-      qrPoints.delete();
-      // Phát hiện Barcode
-      const barDetector = new cv.barcode_BarcodeDetector();
-      const barPoints = new cv.Mat();
-      if (barDetector.detect(mat, barPoints)) {
-        const data = barDetector.decode(mat, barPoints);
-        setBarText(data || "");
-      }
-      barPoints.delete();
-      mat.delete();
+    img.src = imageSrc;
 
-      // 2. Giải mã QR nếu cần dùng jsQR (thay thế hoặc bổ sung)
-      try {
-        const canvas = document.createElement("canvas");
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0, img.width, img.height);
-        const imageData = ctx.getImageData(0, 0, img.width, img.height);
-        const qrResult = jsQR(imageData.data, imageData.width, imageData.height);
-        if (qrResult) {
-          setQrText(qrResult.data);
-        }
-      } catch (e) {
-        console.error("JSQR decode error:", e);
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const codeQR = jsQR(imageData.data, canvas.width, canvas.height);
+      if (codeQR) {
+        setQRResult(codeQR.data);
+      } else {
+        setQRResult("QR không nhận diện được");
       }
 
-      // 3. Giải mã Barcode (ví dụ sử dụng ZXing)
-      try {
-        const codeReader = new BrowserMultiFormatReader();
-        const result = await codeReader.decodeFromImage(img);
-        if (result) {
-          setBarText(result.text || "");
-        }
-      } catch (e) {
-        console.error("ZXing decode error:", e);
-      }
+      // Barcode (1D) decode
+      const reader = new BrowserMultiFormatReader();
+      reader.decodeFromImageElement(img).then(result => {
+        setBarcodeResult(result.getText());
+      }).catch(err => {
+        setBarcodeResult("Barcode không nhận diện được");
+      });
     };
   };
 
+  if (!opencvReady) return <div>Đang tải OpenCV...</div>;
+
   return (
-    <div>
-      <h2>Quét mã QR & Barcode</h2>
-      <Webcam audio={false} ref={webcamRef} screenshotFormat="image/png" />
-      <button onClick={captureAndScan}>Chụp và quét</button>
-      <div>
-        <p><strong>QR Code:</strong> {qrText}</p>
-        <p><strong>Barcode:</strong> {barText}</p>
+    <div style={{ textAlign: "center" }}>
+      <h1>Scanner QR + Barcode</h1>
+      <Webcam
+        ref={webcamRef}
+        screenshotFormat="image/png"
+        videoConstraints={{ facingMode: "environment" }}
+        width={320}
+        height={240}
+      />
+      <br />
+      <button onClick={captureAndProcess}>Chụp và quét mã</button>
+      <div style={{ marginTop: "20px" }}>
+        <h3>QR Code:</h3>
+        <p>{qrResult}</p>
+        <h3>Barcode:</h3>
+        <p>{barcodeResult}</p>
       </div>
     </div>
   );
-}
+};
 
-export default QRBarcodeScanner;
+export default App;
