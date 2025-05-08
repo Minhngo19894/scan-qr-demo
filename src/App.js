@@ -58,9 +58,9 @@ const App = () => {
         locate: true,
       }, (result) => {
         if (result && result.codeResult) {
-          setQuaggaResult(result.codeResult.code);
+          setBarcodeResult(result.codeResult.code);
         } else {
-          setQuaggaResult("Không phát hiện");
+          setBarcodeResult("Không phát hiện");
         }
       });
     });
