@@ -9,20 +9,30 @@ const App = () => {
   const [barcodeResult, setBarcodeResult] = useState("");
   const [qrResult, setQRResult] = useState("");
 
+  // Load OpenCV.js đúng cách chỉ 1 lần
   useEffect(() => {
+    if (window.cv) {
+      console.log("OpenCV đã tồn tại");
+      setOpenCVReady(true);
+      return;
+    }
+
     const script = document.createElement("script");
     script.src = "https://docs.opencv.org/4.x/opencv.js";
     script.async = true;
+
     script.onload = () => {
-      if (window.cv && window.cv['onRuntimeInitialized']) {
-        window.cv['onRuntimeInitialized'] = () => {
-          setOpenCVReady(true);
-        };
-      }
+      console.log("Script opencv.js đã tải");
+      window.cv['onRuntimeInitialized'] = () => {
+        console.log("✅ OpenCV đã sẵn sàng");
+        setOpenCVReady(true);
+      };
     };
+
     script.onerror = () => {
-      console.error("Lỗi tải OpenCV.js");
+      console.error("❌ Lỗi khi tải opencv.js");
     };
+
     document.body.appendChild(script);
   }, []);
 
@@ -39,23 +49,23 @@ const App = () => {
       ctx.drawImage(img, 0, 0);
 
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const codeQR = jsQR(imageData.data, canvas.width, canvas.height);
-      if (codeQR) {
-        setQRResult(codeQR.data);
-      } else {
-        setQRResult("QR không nhận diện được");
-      }
 
+      // QR Code
+      const codeQR = jsQR(imageData.data, canvas.width, canvas.height);
+      setQRResult(codeQR ? codeQR.data : "QR không nhận diện được");
+
+      // Barcode
       const reader = new BrowserMultiFormatReader();
-      reader.decodeFromImageElement(img).then(result => {
-        setBarcodeResult(result.getText());
-      }).catch(err => {
-        setBarcodeResult("Barcode không nhận diện được");
-      });
+      reader
+        .decodeFromImageElement(img)
+        .then((result) => setBarcodeResult(result.getText()))
+        .catch(() => setBarcodeResult("Barcode không nhận diện được"));
     };
   };
 
-  if (!opencvReady) return <div>Đang tải OpenCV...</div>;
+  if (!opencvReady) {
+    return <div>Đang tải OpenCV...</div>;
+  }
 
   return (
     <div style={{ textAlign: "center" }}>
