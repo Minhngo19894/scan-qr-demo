@@ -66,23 +66,28 @@ const App = () => {
         setQRImage(null);
       }
 
-      // === Barcode Detection ===
-      const reader = new BrowserMultiFormatReader();
-      reader
-        .decodeFromImage(img.src) // 👈 dùng ảnh gốc, không dùng canvas
-        .then((result) => {
-          setBarcodeResult(result.getText());
-          // Giả định barcode ở phần dưới ảnh
-          const barX = canvas.width * 0.1;
-          const barY = canvas.height * 0.7;
-          const barW = canvas.width * 0.8;
-          const barH = canvas.height * 0.2;
-          setBarcodeImage(cropRegion(ctx, barX, barY, barW, barH));
-        })
-        .catch(() => {
-          setBarcodeResult("Barcode không nhận diện được");
-          setBarcodeImage(null);
-        });
+      const barCanvas = document.createElement("canvas");
+      barCanvas.width = barW;
+      barCanvas.height = barH;
+      const barCtx = barCanvas.getContext("2d");
+      barCtx.drawImage(canvas, barX, barY, barW, barH, 0, 0, barW, barH);
+      const barDataURL = barCanvas.toDataURL("image/png");
+      setBarcodeImage(barDataURL);
+      
+      // Tạo thẻ ảnh mới từ vùng crop
+      const croppedImg = new Image();
+      croppedImg.src = barDataURL;
+      
+      croppedImg.onload = () => {
+        reader
+          .decodeFromImage(croppedImg)
+          .then((result) => {
+            setBarcodeResult(result.getText());
+          })
+          .catch(() => {
+            setBarcodeResult("Barcode không nhận diện được");
+          });
+      };
     };
   };
 
