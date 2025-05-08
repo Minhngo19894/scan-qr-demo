@@ -69,6 +69,7 @@ const App = () => {
 
   const captureAndProcess = () => {
     const imageSrc = webcamRef.current.getScreenshot();
+    detectWithQuagga(imageSrc)
     const img = new Image();
     img.src = imageSrc;
 
@@ -96,7 +97,7 @@ const App = () => {
         setQRImage(null);
       }
 
-    detectWithQuagga(imageSrc)
+   
 
     };
   };
