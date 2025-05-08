@@ -37,6 +37,17 @@ const App = () => {
     tempCtx.drawImage(ctx.canvas, x, y, w, h, 0, 0, w, h);
     return tempCanvas.toDataURL("image/png");
   };
+
+  const loadImage = (src) => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.src = src;
+      img.onload = () => resolve(img);
+      img.onerror = (err) => reject(err);
+    });
+  };
+  
   const detectWithQuagga = (base64Image) => {
     setBarcodeResult('chay1')
     loadImage(base64Image).then((img) => {
