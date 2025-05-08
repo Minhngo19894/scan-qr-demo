@@ -102,6 +102,12 @@ const App = () => {
   if (!opencvReady) {
     return <div style={styles.loading}>Đang tải OpenCV...</div>;
   }
+  const videoConstraints = {
+    facingMode: "environment", // Đảm bảo camera sau được sử dụng
+    width: 640, // Giảm kích thước của camera để dễ dàng nhận diện
+    height: 480
+  };
+
 
   return (
     <div style={styles.container}>
