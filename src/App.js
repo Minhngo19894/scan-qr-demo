@@ -66,6 +66,13 @@ const App = () => {
         setQRImage(null);
       }
 
+      // === Barcode Detection ===
+      const barX = canvas.width * 0.1;
+      const barY = canvas.height * 0.7;
+      const barW = canvas.width * 0.8;
+      const barH = canvas.height * 0.2;
+
+      // Crop ảnh barcode
       const barCanvas = document.createElement("canvas");
       barCanvas.width = barW;
       barCanvas.height = barH;
@@ -88,6 +95,7 @@ const App = () => {
             setBarcodeResult("Barcode không nhận diện được");
           });
       };
+
     };
   };
 
@@ -104,7 +112,7 @@ const App = () => {
         videoConstraints={{
           facingMode: "environment",
           width: { ideal: 1280 },
-          height: { ideal: 720 },
+          height: { ideal: 300 },
         }}
         style={styles.webcam}
       />
@@ -128,8 +136,8 @@ const App = () => {
 const styles = {
   container: {
     padding: 16,
-    with: '100%',
-    margin: "auto",
+
+    with: '100%', margin: "auto",
     fontFamily: "Arial, sans-serif",
   },
   title: {
