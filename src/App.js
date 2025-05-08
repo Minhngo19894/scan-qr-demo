@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import Webcam from 'react-webcam';
-import { BrowserMultiFormatReader } from '@zxing/browser';
+import { BrowserMultiFormatReader } from '@zxing/library';
 
 const BarcodeScanner = () => {
   const webcamRef = useRef(null);
