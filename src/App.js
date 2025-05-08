@@ -7,8 +7,17 @@ const App = () => {
   const [qrData, setQrData] = useState(null);
   const [barcodeData, setBarcodeData] = useState(null);
   const [imageSrc, setImageSrc] = useState(null);
+  const [croppedQRCode, setCroppedQRCode] = useState(null);
+  const [croppedBarcode, setCroppedBarcode] = useState(null);
 
   const webcamRef = React.useRef(null);
+
+  // Video Constraints để sử dụng camera sau trên điện thoại
+  const videoConstraints = {
+    facingMode: "environment", // Đảm bảo camera sau được sử dụng
+    width: 1280,
+    height: 720
+  };
 
   // Chụp ảnh từ webcam
   const capture = () => {
@@ -27,7 +36,7 @@ const App = () => {
 
     const imageData = ctx.getImageData(0, 0, image.width, image.height);
     const code = jsQR(imageData.data, image.width, image.height);
-    return code ? code.data : null;
+    return code ? code : null;
   };
 
   // Nhận diện Barcode từ ảnh
@@ -46,13 +55,23 @@ const App = () => {
         },
         (result) => {
           if (result && result.codeResult) {
-            resolve(result.codeResult.code);
+            resolve(result.codeResult);
           } else {
             reject('Không tìm thấy mã vạch');
           }
         }
       );
     });
+  };
+
+  // Cắt ảnh theo vùng của QR Code và Barcode
+  const cropImage = (image, cropArea) => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = cropArea.width;
+    canvas.height = cropArea.height;
+    ctx.drawImage(image, cropArea.x, cropArea.y, cropArea.width, cropArea.height, 0, 0, cropArea.width, cropArea.height);
+    return canvas.toDataURL('image/jpeg');
   };
 
   // Xử lý ảnh sau khi chụp
@@ -65,7 +84,17 @@ const App = () => {
       // Nhận diện QR Code
       const qrCode = detectQRCode(image);
       if (qrCode) {
-        setQrData(qrCode);
+        setQrData(qrCode.data); // Lưu dữ liệu QR Code
+
+        // Cắt vùng QR Code
+        const qrCropArea = {
+          x: qrCode.location.topLeft.x,
+          y: qrCode.location.topLeft.y,
+          width: qrCode.location.bottomRight.x - qrCode.location.topLeft.x,
+          height: qrCode.location.bottomRight.y - qrCode.location.topLeft.y
+        };
+        const croppedQR = cropImage(image, qrCropArea);
+        setCroppedQRCode(croppedQR);
       } else {
         setQrData('Không tìm thấy QR Code');
       }
@@ -73,7 +102,17 @@ const App = () => {
       // Nhận diện Barcode
       try {
         const barcode = await detectBarcode(imageSrc);
-        setBarcodeData(barcode);
+        setBarcodeData(barcode.code);
+
+        // Cắt vùng Barcode
+        const barcodeCropArea = {
+          x: barcode.bounds[0].x,
+          y: barcode.bounds[0].y,
+          width: barcode.bounds[1].x - barcode.bounds[0].x,
+          height: barcode.bounds[2].y - barcode.bounds[0].y
+        };
+        const croppedBarcode = cropImage(image, barcodeCropArea);
+        setCroppedBarcode(croppedBarcode);
       } catch (error) {
         setBarcodeData('Không tìm thấy Barcode');
       }
@@ -88,6 +127,7 @@ const App = () => {
         ref={webcamRef}
         screenshotFormat="image/jpeg"
         width="100%"
+        videoConstraints={videoConstraints} // Sử dụng camera sau
       />
       <br />
       <button onClick={capture}>Chụp Ảnh</button>
@@ -102,12 +142,24 @@ const App = () => {
           <div>
             <h3>Thông tin QR Code:</h3>
             <p>{qrData}</p>
+            {croppedQRCode && (
+              <div>
+                <h4>QR Code đã cắt:</h4>
+                <img src={croppedQRCode} alt="Cropped QR Code" width="200" />
+              </div>
+            )}
           </div>
         )}
         {barcodeData && (
           <div>
             <h3>Thông tin Barcode:</h3>
             <p>{barcodeData}</p>
+            {croppedBarcode && (
+              <div>
+                <h4>Barcode đã cắt:</h4>
+                <img src={croppedBarcode} alt="Cropped Barcode" width="200" />
+              </div>
+            )}
           </div>
         )}
       </div>
