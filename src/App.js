@@ -63,52 +63,55 @@ const App = () => {
     const img = new Image();
     img.src = imageUrl;
     await new Promise((res) => (img.onload = res));
-
+  
     const canvas = document.createElement("canvas");
-    canvas.width = img.width;
-    canvas.height = img.height;
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
     const ctx = canvas.getContext("2d");
-    ctx.drawImage(img, 0, 0);
-
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  
     let qrImage = null;
     let barcodeImage = null;
-
-    // --- QR code ---
+  
+    // --- QR Code chính xác hơn ---
     try {
       const qrReader = new BrowserMultiFormatReader();
       const result = await qrReader.decodeFromImageElement(img);
-      const [p1, p2] = result.resultPoints;
-      const x = Math.max(Math.min(p1.x, p2.x) - 20, 0);
-      const y = Math.max(Math.min(p1.y, p2.y) - 20, 0);
-      const w = Math.abs(p1.x - p2.x) + 40;
-      const h = w;
-
+      const points = result.resultPoints;
+      const xs = points.map(p => p.x);
+      const ys = points.map(p => p.y);
+      const x = Math.max(Math.min(...xs) - 20, 0);
+      const y = Math.max(Math.min(...ys) - 20, 0);
+      const w = Math.min(Math.max(...xs) - x + 40, canvas.width - x);
+      const h = Math.min(Math.max(...ys) - y + 40, canvas.height - y);
+  
       const qrCanvas = document.createElement("canvas");
       qrCanvas.width = w;
       qrCanvas.height = h;
       qrCanvas.getContext("2d").drawImage(canvas, x, y, w, h, 0, 0, w, h);
       qrImage = qrCanvas.toDataURL("image/jpeg");
-    } catch {
-      console.log("Không phát hiện QR");
+    } catch (err) {
+      console.log("Không phát hiện QR:", err);
     }
-
-    // --- Barcode ---
+  
+    // --- Barcode chính xác hơn ---
     await new Promise((resolve) => {
       Quagga.decodeSingle({
         src: imageUrl,
-        inputStream: { size: 1280 },
+        inputStream: { size: 1600 },
         decoder: {
           readers: ["code_128_reader", "ean_reader", "ean_8_reader"]
         },
         locate: true
       }, (data) => {
         if (data?.box) {
-          const [p1, , p3] = data.box;
-          const x = Math.max(Math.min(p1[0], p3[0]) - 10, 0);
-          const y = Math.max(Math.min(p1[1], p3[1]) - 10, 0);
-          const w = Math.abs(p1[0] - p3[0]) + 20;
-          const h = Math.abs(p1[1] - p3[1]) + 20;
-
+          const xs = data.box.map(p => p[0]);
+          const ys = data.box.map(p => p[1]);
+          const x = Math.max(Math.min(...xs) - 10, 0);
+          const y = Math.max(Math.min(...ys) - 10, 0);
+          const w = Math.min(Math.max(...xs) - x + 20, canvas.width - x);
+          const h = Math.min(Math.max(...ys) - y + 20, canvas.height - y);
+  
           const barCanvas = document.createElement("canvas");
           barCanvas.width = w;
           barCanvas.height = h;
@@ -118,9 +121,10 @@ const App = () => {
         resolve();
       });
     });
-
+  
     return { qrImage, barcodeImage };
   };
+  
 
   return (
     <div style={{ padding: 16, textAlign: "center", fontFamily: "Arial" }}>
