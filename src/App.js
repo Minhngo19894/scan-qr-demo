@@ -1,75 +1,65 @@
-// App.jsx
-import React, { useRef, useState } from "react";
-import Webcam from "react-webcam";
-import { BrowserMultiFormatReader } from "@zxing/browser";
-import Quagga from "quagga";
+const detectAndCropCodes = async (imageUrl) => {
+  const img = new Image();
+  img.src = imageUrl;
+  await new Promise((resolve) => (img.onload = resolve));
 
-const App = () => {
-  const webcamRef = useRef(null);
-  const [imageSrc, setImageSrc] = useState(null);
-  const [result, setResult] = useState({ qr: "", barcode: "" });
+  const canvas = document.createElement("canvas");
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(img, 0, 0);
 
-  const capture = async () => {
-    const screenshot = webcamRef.current.getScreenshot();
-    if (!screenshot) return;
+  let qrImage = null;
+  let barcodeImage = null;
 
-    setImageSrc(screenshot);
-    setResult({ qr: "Đang quét...", barcode: "Đang quét..." });
-
-    // Phân tích QR Code
+  // === 1. Phát hiện QR code bằng ZXing ===
+  try {
     const qrReader = new BrowserMultiFormatReader();
-    try {
-      const qrResult = await qrReader.decodeFromImageUrl(screenshot);
-      setResult(prev => ({ ...prev, qr: qrResult.text }));
-    } catch {
-      setResult(prev => ({ ...prev, qr: "Không phát hiện QR code" }));
-    }
+    const result = await qrReader.decodeFromImageElement(img);
+    const points = result.resultPoints;
+    const [p1, p2] = points;
 
-    // Phân tích Barcode
+    const x = Math.min(p1.x, p2.x) - 20;
+    const y = Math.min(p1.y, p2.y) - 20;
+    const w = Math.abs(p1.x - p2.x) + 40;
+    const h = w;
+
+    const qrCanvas = document.createElement("canvas");
+    qrCanvas.width = w;
+    qrCanvas.height = h;
+    qrCanvas.getContext("2d").drawImage(canvas, x, y, w, h, 0, 0, w, h);
+    qrImage = qrCanvas.toDataURL("image/jpeg");
+  } catch {
+    console.log("Không phát hiện QR");
+  }
+
+  // === 2. Phát hiện barcode bằng Quagga ===
+  let barcodeBox = null;
+  await new Promise((resolve) => {
     Quagga.decodeSingle({
-      src: screenshot,
-      numOfWorkers: 0,
-      inputStream: { size: 800 },
+      src: imageUrl,
+      inputStream: { size: 1280 },
       decoder: {
         readers: ["code_128_reader", "ean_reader", "ean_8_reader"]
-      }
+      },
+      locate: true
     }, (data) => {
-      if (data?.codeResult?.code) {
-        setResult(prev => ({ ...prev, barcode: data.codeResult.code }));
-      } else {
-        setResult(prev => ({ ...prev, barcode: "Không phát hiện barcode" }));
+      if (data?.box) {
+        const [p1, , p3] = data.box;
+        const x = Math.min(p1[0], p3[0]) - 10;
+        const y = Math.min(p1[1], p3[1]) - 10;
+        const w = Math.abs(p1[0] - p3[0]) + 20;
+        const h = Math.abs(p1[1] - p3[1]) + 20;
+
+        const barCanvas = document.createElement("canvas");
+        barCanvas.width = w;
+        barCanvas.height = h;
+        barCanvas.getContext("2d").drawImage(canvas, x, y, w, h, 0, 0, w, h);
+        barcodeImage = barCanvas.toDataURL("image/jpeg");
       }
+      resolve();
     });
-  };
+  });
 
-  return (
-    <div className="p-4 text-center">
-      <h1 className="text-xl font-bold mb-4">Quét QR & Barcode</h1>
-      <Webcam
-        ref={webcamRef}
-        screenshotFormat="image/jpeg"
-        videoConstraints={{ facingMode: "environment" }} // camera sau
-        style={{ width: "100%", maxWidth: 400 }}
-      />
-      <button
-        onClick={capture}
-        className="mt-4 bg-blue-500 text-white py-2 px-4 rounded"
-      >
-        Chụp & Quét
-      </button>
-
-      {imageSrc && (
-        <div className="mt-4">
-          <img src={imageSrc} alt="Captured" className="max-w-full rounded" />
-        </div>
-      )}
-
-      <div className="mt-4 text-left">
-        <p><strong>QR Code:</strong> {result.qr}</p>
-        <p><strong>Barcode:</strong> {result.barcode}</p>
-      </div>
-    </div>
-  );
+  return { qrImage, barcodeImage };
 };
-
-export default App;
