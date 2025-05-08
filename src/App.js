@@ -47,7 +47,7 @@ const App = () => {
       img.onerror = (err) => reject(err);
     });
   };
-  
+
   const detectWithQuagga = (base64Image) => {
     setBarcodeResult('chay1')
     loadImage(base64Image).then((img) => {
@@ -130,7 +130,7 @@ const App = () => {
       <Webcam
         ref={webcamRef}
         screenshotFormat="image/png"
-        width="80%" // Điều chỉnh kích thước camera nhỏ hơn
+        width="100%" // Điều chỉnh kích thước camera nhỏ hơn
         videoConstraints={videoConstraints} // Sử dụng camera sau
       />
       <button onClick={captureAndProcess} style={styles.button}>
