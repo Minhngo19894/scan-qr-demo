@@ -107,14 +107,11 @@ const App = () => {
     <div style={styles.container}>
       <h1 style={styles.title}>📷 QR & Barcode Scanner</h1>
       <Webcam
+        audio={false}
         ref={webcamRef}
-        screenshotFormat="image/png"
-        videoConstraints={{
-          facingMode: "environment",
-          width: { ideal: 1280 },
-          height: { ideal: 300 },
-        }}
-        style={styles.webcam}
+        screenshotFormat="image/jpeg"
+        width="80%" // Điều chỉnh kích thước camera nhỏ hơn
+        videoConstraints={videoConstraints} // Sử dụng camera sau
       />
       <button onClick={captureAndProcess} style={styles.button}>
         Chụp & Quét mã
