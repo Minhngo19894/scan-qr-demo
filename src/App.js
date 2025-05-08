@@ -9,14 +9,21 @@ const App = () => {
   const [barcodeResult, setBarcodeResult] = useState("");
   const [qrResult, setQRResult] = useState("");
 
-  // Load OpenCV.js
   useEffect(() => {
-    const checkReady = setInterval(() => {
-      if (window.cv && window.cv.ready) {
-        setOpenCVReady(true);
-        clearInterval(checkReady);
+    const script = document.createElement("script");
+    script.src = "https://docs.opencv.org/4.x/opencv.js";
+    script.async = true;
+    script.onload = () => {
+      if (window.cv && window.cv['onRuntimeInitialized']) {
+        window.cv['onRuntimeInitialized'] = () => {
+          setOpenCVReady(true);
+        };
       }
-    }, 100);
+    };
+    script.onerror = () => {
+      console.error("Lỗi tải OpenCV.js");
+    };
+    document.body.appendChild(script);
   }, []);
 
   const captureAndProcess = () => {
@@ -39,7 +46,6 @@ const App = () => {
         setQRResult("QR không nhận diện được");
       }
 
-      // Barcode (1D) decode
       const reader = new BrowserMultiFormatReader();
       reader.decodeFromImageElement(img).then(result => {
         setBarcodeResult(result.getText());
