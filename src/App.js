@@ -9,10 +9,14 @@ const App = () => {
   const [barcodeData, setBarcodeData] = useState("");
   const [qrImage, setQrImage] = useState(null);
   const [barcodeImage, setBarcodeImage] = useState(null);
+  const [screenshot, setScreenshot] = useState(null);
 
   const capture = async () => {
     const screenshot = webcamRef.current.getScreenshot();
     if (!screenshot) return;
+
+    // Cập nhật ảnh gốc để kiểm tra
+    setScreenshot(screenshot);
 
     // Reset kết quả
     setQrData("Đang quét...");
@@ -43,10 +47,18 @@ const App = () => {
     if (barcodeImage) {
       Quagga.decodeSingle({
         src: barcodeImage,
-        inputStream: { size: 800 },
+        inputStream: { size: 1600 }, // Tăng kích thước xử lý ảnh
         decoder: {
-          readers: ["code_128_reader", "ean_reader", "ean_8_reader"]
-        }
+          readers: [
+            "code_128_reader", 
+            "ean_reader", 
+            "ean_8_reader", 
+            "code_39_reader", 
+            "upc_reader", 
+            "upc_e_reader"
+          ] // Hỗ trợ thêm nhiều loại barcode
+        },
+        locate: true
       }, (data) => {
         if (data?.codeResult?.code) {
           setBarcodeData(data.codeResult.code);
@@ -63,16 +75,16 @@ const App = () => {
     const img = new Image();
     img.src = imageUrl;
     await new Promise((res) => (img.onload = res));
-  
+
     const canvas = document.createElement("canvas");
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;
     const ctx = canvas.getContext("2d");
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-  
+
     let qrImage = null;
     let barcodeImage = null;
-  
+
     // --- QR Code chính xác hơn ---
     try {
       const qrReader = new BrowserMultiFormatReader();
@@ -84,7 +96,7 @@ const App = () => {
       const y = Math.max(Math.min(...ys) - 20, 0);
       const w = Math.min(Math.max(...xs) - x + 40, canvas.width - x);
       const h = Math.min(Math.max(...ys) - y + 40, canvas.height - y);
-  
+
       const qrCanvas = document.createElement("canvas");
       qrCanvas.width = w;
       qrCanvas.height = h;
@@ -93,14 +105,21 @@ const App = () => {
     } catch (err) {
       console.log("Không phát hiện QR:", err);
     }
-  
+
     // --- Barcode chính xác hơn ---
     await new Promise((resolve) => {
       Quagga.decodeSingle({
         src: imageUrl,
         inputStream: { size: 1600 },
         decoder: {
-          readers: ["code_128_reader", "ean_reader", "ean_8_reader"]
+          readers: [
+            "code_128_reader",
+            "ean_reader",
+            "ean_8_reader",
+            "code_39_reader",
+            "upc_reader",
+            "upc_e_reader"
+          ],
         },
         locate: true
       }, (data) => {
@@ -111,7 +130,7 @@ const App = () => {
           const y = Math.max(Math.min(...ys) - 10, 0);
           const w = Math.min(Math.max(...xs) - x + 20, canvas.width - x);
           const h = Math.min(Math.max(...ys) - y + 20, canvas.height - y);
-  
+
           const barCanvas = document.createElement("canvas");
           barCanvas.width = w;
           barCanvas.height = h;
@@ -121,10 +140,9 @@ const App = () => {
         resolve();
       });
     });
-  
+
     return { qrImage, barcodeImage };
   };
-  
 
   return (
     <div style={{ padding: 16, textAlign: "center", fontFamily: "Arial" }}>
@@ -160,6 +178,9 @@ const App = () => {
           <img src={barcodeImage} alt="Barcode" style={{ maxWidth: 200 }} />
         )}
         <p>{barcodeData}</p>
+
+        <h4>🔳 Ảnh Gốc (Kiểm tra vị trí mã vạch)</h4>
+        <img src={screenshot} alt="Original" style={{ maxWidth: 300 }} />
       </div>
     </div>
   );
