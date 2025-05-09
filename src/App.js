@@ -119,8 +119,8 @@ const App = () => {
   }
   const videoConstraints = {
     facingMode: "environment", // Đảm bảo camera sau được sử dụng
-    width: 320, // Giảm kích thước của camera để dễ dàng nhận diện
-    height: 240
+    width: 640, // Giảm kích thước của camera để dễ dàng nhận diện
+    height: 480
   };
 
 
@@ -130,7 +130,7 @@ const App = () => {
       <Webcam
         ref={webcamRef}
         screenshotFormat="image/png"
-        width="100%" // Điều chỉnh kích thước camera nhỏ hơn
+        width="80%" // Điều chỉnh kích thước camera nhỏ hơn
         videoConstraints={videoConstraints} // Sử dụng camera sau
       />
       <button onClick={captureAndProcess} style={styles.button}>
